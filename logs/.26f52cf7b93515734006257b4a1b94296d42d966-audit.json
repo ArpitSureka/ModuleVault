@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/a0s16ic/PersonalFiles/projects4/ModuleVault/logs/.26f52cf7b93515734006257b4a1b94296d42d966-audit.json",
+    "files": [
+        {
+            "date": 1749151155586,
+            "name": "/Users/a0s16ic/PersonalFiles/projects4/ModuleVault/logs/2025-06-06-combined.log",
+            "hash": "99652f026f11a6d0635d7a8c459730096406cb80c2ad00d3ad1619044edd749b"
+        }
+    ],
+    "hashType": "sha256"
+}

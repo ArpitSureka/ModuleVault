@@ -5,6 +5,7 @@ const packageService = require('../services/packageService');
 const buildService = require('../services/buildService');
 const path = require('path');
 const fs = require('fs');
+const logger = require('../utils/logger');
 
 /**
  * @swagger
@@ -130,19 +131,46 @@ const fs = require('fs');
 
 // GET /api/executables - List all executables with pagination
 router.get('/', async (req, res) => {
+  // Start performance tracking for this route
+  req.checkpoint('list_executables_start');
+  
   try {
+    req.logger.info('Listing executables', {
+      query: {
+        page: req.query.page,
+        limit: req.query.limit
+      }
+    });
+    
     const Executable = getExecutableModel();
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
+    
+    // Mark DB query start
+    req.checkpoint('db_count_start');
     const total = await Executable.countDocuments();
+    req.checkpoint('db_count_complete');
+    
+    // Mark find query start
+    req.checkpoint('db_find_start');
     const executables = await Executable.find()
       .sort({ downloads: -1, createdAt: -1 })
       .skip(offset)
       .limit(limit);
+    req.checkpoint('db_find_complete');
+    
+    req.logger.debug('Database queries completed', {
+      performance: req.getPerformanceSummary(),
+      meta: {
+        resultCount: executables.length,
+        totalCount: total
+      }
+    });
 
     res.json({
       success: true,
+      requestId: req.requestId, // Include request ID in response
       data: {
         executables,
         pagination: {
@@ -154,22 +182,40 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('List executables error:', error);
+    req.checkpoint('error_handling');
+    req.logger.error('List executables error:', {
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      },
+      performance: req.getPerformanceSummary()
+    });
+    
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve executables',
-      error: error.message
+      error: error.message,
+      requestId: req.requestId  // Include request ID for easier troubleshooting
     });
   }
 });
 
 // GET /api/executables/search - Search executables
 router.get('/search', async (req, res) => {
+  // Start performance tracking for this route
+  req.checkpoint('search_executables_start');
+  
   try {
+    req.logger.info('Searching executables', {
+      searchParams: req.query
+    });
+    
     const Executable = getExecutableModel();
     const { query, page = 1, limit = 10, repositoryManager } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
     let filter = {};
+    
     if (query) {
       filter.$or = [
         { name: { $regex: query, $options: 'i' } },
@@ -177,17 +223,34 @@ router.get('/search', async (req, res) => {
         { tags: query }
       ];
     }
+    
     if (repositoryManager && ['npm', 'pip'].includes(repositoryManager)) {
       filter.repositoryManager = repositoryManager;
     }
+    
+    req.checkpoint('search_count_start');
     const total = await Executable.countDocuments(filter);
+    req.checkpoint('search_count_complete');
+    
+    req.checkpoint('search_find_start');
     const executables = await Executable.find(filter)
       .sort({ downloads: -1, createdAt: -1 })
       .skip(offset)
       .limit(parseInt(limit));
+    req.checkpoint('search_find_complete');
+    
+    req.logger.debug('Search completed', {
+      performance: req.getPerformanceSummary(),
+      meta: {
+        resultCount: executables.length,
+        totalCount: total,
+        filter
+      }
+    });
 
     res.json({
       success: true,
+      requestId: req.requestId,
       data: {
         executables,
         pagination: {
@@ -199,11 +262,22 @@ router.get('/search', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Search error:', error);
+    req.checkpoint('search_error');
+    req.logger.error('Search executables error:', {
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      },
+      query: req.query,
+      performance: req.getPerformanceSummary()
+    });
+    
     res.status(500).json({
       success: false,
       message: 'Failed to search executables',
-      error: error.message
+      error: error.message,
+      requestId: req.requestId
     });
   }
 });
@@ -235,25 +309,47 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/executables/download - Download/build executable
 router.post('/download', async (req, res) => {
+  // Start performance tracking for this route
+  req.checkpoint('download_start');
+  
   try {
+    req.logger.info('Download/build executable request', {
+      package: req.body
+    });
+    
     const Executable = getExecutableModel();
     const { name, repositoryManager, os, version } = req.body;
+    
     if (!name || !repositoryManager || !os) {
+      req.logger.warn('Missing required fields in download request', {
+        body: req.body
+      });
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: name, repositoryManager, and os are required'
+        message: 'Missing required fields: name, repositoryManager, and os are required',
+        requestId: req.requestId
       });
     }
+    
     if (!['npm', 'pip'].includes(repositoryManager)) {
+      req.logger.warn('Invalid repositoryManager specified', {
+        repositoryManager: repositoryManager
+      });
       return res.status(400).json({
         success: false,
-        message: 'Invalid repositoryManager. Must be "npm" or "pip"'
+        message: 'Invalid repositoryManager. Must be "npm" or "pip"',
+        requestId: req.requestId
       });
     }
+    
     if (!['windows', 'macos', 'linux'].includes(os)) {
+      req.logger.warn('Invalid OS specified', {
+        os: os
+      });
       return res.status(400).json({
         success: false,
-        message: 'Invalid os. Must be "windows", "macos", or "linux"'
+        message: 'Invalid os. Must be "windows", "macos", or "linux"',
+        requestId: req.requestId
       });
     }
     console.log(`Processing download request: ${name} (${repositoryManager}) for ${os}`);

@@ -1,0 +1,3 @@
+{"level":"info","message":"Connected to database","service":"module-vault","timestamp":"2025-06-06 00:49:18.030"}
+{"level":"warn","message":"Port 5000 in use, trying port 5001...","service":"module-vault","timestamp":"2025-06-06 00:49:18.055"}
+{"endpoints":{"api":"http://0.0.0.0:5001/api/executables","docs":"http://0.0.0.0:5001/api-docs","download":"http://0.0.0.0:5001/download"},"level":"info","message":"Server started successfully","port":5001,"service":"module-vault","timestamp":"2025-06-06 00:49:18.056"}
