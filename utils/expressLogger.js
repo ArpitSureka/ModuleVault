@@ -1,8 +1,13 @@
-const expressWinston = require('express-winston');
-const winston = require('winston');
-const path = require('path');
-const fs = require('fs');
-const logger = require('./logger');
+import expressWinston from 'express-winston';
+import winston from 'winston';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import fs from 'fs';
+import logger from './logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '../logs');
@@ -42,7 +47,7 @@ const errorLogger = expressWinston.errorLogger({
   blacklistedMetaFields: ['trace', 'os', 'process']
 });
 
-module.exports = {
+export {
   requestLogger,
   errorLogger
 };

@@ -1,5 +1,5 @@
 // Mongoose Executable schema for MongoDB
-const { mongoose } = require('../config/database');
+import { mongoose } from '../config/database.js';
 
 const ExecutableSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -16,4 +16,4 @@ const ExecutableSchema = new mongoose.Schema({
 
 const Executable = mongoose.models.Executable || mongoose.model('Executable', ExecutableSchema);
 
-module.exports = () => Executable;
+export default () => Executable;

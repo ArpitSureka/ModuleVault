@@ -1,8 +1,8 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const path = require('path');
-const fs = require('fs');
-const logger = require('../utils/logger');
+import path from 'path';
+import fs from 'fs';
+import logger from '../utils/logger.js';
 
 // List all available log files
 router.get('/files', async (req, res) => {
@@ -316,4 +316,4 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

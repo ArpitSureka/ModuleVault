@@ -1,6 +1,12 @@
 // Mongoose setup for MongoDB
-const mongoose = require('mongoose');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const DATABASE_URL = process.env.MONGODB_URI || 'mongodb://localhost:27017/modulevault';
 
@@ -14,7 +20,9 @@ const connectDB = async () => {
     console.log('MongoDB connected successfully');
 
     // Ensure required collections exist by creating a dummy document if missing
-    const Executable = mongoose.models.Executable || require('../models/Executable')();
+    const executablePath = path.join(__dirname, '../models/Executable.js');
+    const getExecutableModel = (await import(executablePath)).default;
+    const Executable = mongoose.models.Executable || getExecutableModel();
     const collections = await mongoose.connection.db.listCollections().toArray();
     const collectionNames = collections.map(col => col.name);
     if (!collectionNames.includes('executables')) {
@@ -36,4 +44,4 @@ const connectDB = async () => {
   }
 };
 
-module.exports = { connectDB, mongoose };
+export { connectDB, mongoose };

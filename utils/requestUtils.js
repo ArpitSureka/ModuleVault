@@ -1,5 +1,5 @@
-const { v4: uuidv4 } = require('uuid');
-const logger = require('./logger');
+import { v4 as uuidv4 } from 'uuid';
+import logger from './logger.js';
 
 /**
  * Middleware to assign a unique request ID to each incoming request
@@ -85,7 +85,7 @@ function getElapsedMs(startTime) {
   return (diff[0] * 1e9 + diff[1]) / 1e6; // Convert to milliseconds
 }
 
-module.exports = {
+export {
   requestTracker,
   performanceTracker
 };

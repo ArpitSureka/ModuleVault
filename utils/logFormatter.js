@@ -117,7 +117,7 @@ const createLogMetadata = (req, options = {}) => {
   return metadata;
 };
 
-module.exports = {
+export {
   formatError,
   formatResponse,
   formatUser,

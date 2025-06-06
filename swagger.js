@@ -1,5 +1,5 @@
 // Swagger (OpenAPI) specification for ModuleVault 2 API
-module.exports = {
+export default {
   definition: {
     openapi: '3.0.0',
     info: {

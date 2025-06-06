@@ -1,9 +1,14 @@
-const winston = require('winston');
+import winston from 'winston';
 const { createLogger, format, transports } = winston;
 const { combine, timestamp, printf, colorize, json } = format;
-const path = require('path');
-require('winston-daily-rotate-file');
-const fs = require('fs');
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import 'winston-daily-rotate-file';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '../logs');
@@ -91,4 +96,4 @@ logger.stream = {
   }
 };
 
-module.exports = logger;
+export default logger;

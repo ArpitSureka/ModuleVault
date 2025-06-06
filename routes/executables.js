@@ -1,11 +1,11 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const getExecutableModel = require('../models/Executable');
-const packageService = require('../services/packageService');
-const buildService = require('../services/buildService');
-const path = require('path');
-const fs = require('fs');
-const logger = require('../utils/logger');
+import getExecutableModel from '../models/Executable.js';
+import packageService from '../services/packageService.js';
+import buildService from '../services/buildService.js';
+import path from 'path';
+import fs from 'fs';
+import logger from '../utils/logger.js';
 
 /**
  * @swagger
@@ -331,7 +331,10 @@ router.post('/download', async (req, res) => {
       });
     }
     
-    if (!['npm', 'pip'].includes(repositoryManager)) {
+
+  // Removing Support for PIP Temporarily
+    // if (!['npm', 'pip'].includes(repositoryManager)) {
+    if (!['npm'].includes(repositoryManager)) {
       req.logger.warn('Invalid repositoryManager specified', {
         repositoryManager: repositoryManager
       });
@@ -420,4 +423,4 @@ router.post('/download', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

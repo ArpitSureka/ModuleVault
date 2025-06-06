@@ -1,8 +1,13 @@
-const getExecutableModel = require('../models/Executable');
-const packageService = require('../services/packageService');
-const buildService = require('../services/buildService');
-const { createReadStream } = require('fs');
-const path = require('path');
+import getExecutableModel from '../models/Executable.js';
+import packageService from '../services/packageService.js';
+import buildService from '../services/buildService.js';
+import { createReadStream } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const resolvers = {
   Query: {
@@ -125,4 +130,4 @@ const resolvers = {
   }
 };
 
-module.exports = resolvers;
+export default resolvers;

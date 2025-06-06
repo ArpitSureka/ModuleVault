@@ -1,8 +1,21 @@
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const packageService = require('./packageService');
-const { generateUniqueFileName, getFileSize, cleanupDirectory } = require('../utils/fileUtils');
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import packageService from './packageService.js';
+import fileUtils from '../utils/fileUtils.js';
+
+import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "fs";
+import { join, resolve } from "path";
+import { exec as execCb } from "child_process";
+import { promisify } from "util";
+
+const exec = promisify(execCb);
+
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class BuildService {
   constructor() {
@@ -81,93 +94,119 @@ class BuildService {
     }
   }
 
-  async createNpmExecutable(packageInfo, workDir, os) {
-    try {
-      // Check if pkg is available for creating Node.js executables
-      try {
-        execSync('which pkg', { encoding: 'utf8' });
-      } catch (error) {
-        // Install pkg globally if not available
-        console.log('Installing pkg for Node.js executable creation...');
-        execSync('npm install -g pkg', { encoding: 'utf8', timeout: 120000 });
-      }
 
-      // Find the main entry point
-      // Handle scoped packages (@scope/pkg) correctly
-      console.log('Looking for package.json in node_modules');
-      let packageJsonPath;
-      
-      // First check if it's available directly in node_modules
-      if (fs.existsSync(path.join(workDir, 'node_modules', packageInfo.name, 'package.json'))) {
-        packageJsonPath = path.join(workDir, 'node_modules', packageInfo.name, 'package.json');
-        console.log(`Found package.json at ${packageJsonPath}`);
-      }
-      // Check common alternative locations
-      else if (packageInfo.name.startsWith('@') && !fs.existsSync(packageJsonPath)) {
-        // For scoped packages, try different path structures
-        const packageNameParts = packageInfo.name.split('/');
-        if (packageNameParts.length === 2) {
-          const scope = packageNameParts[0].replace('@', '');
-          const pkgName = packageNameParts[1];
-          
-          const possiblePaths = [
-            path.join(workDir, 'node_modules', packageInfo.name, 'package.json'),
-            path.join(workDir, 'node_modules', scope, pkgName, 'package.json'),
-            path.join(workDir, 'node_modules', '@' + scope, pkgName, 'package.json')
-          ];
-          
-          for (const possiblePath of possiblePaths) {
-            console.log(`Checking for package.json at ${possiblePath}`);
-            if (fs.existsSync(possiblePath)) {
-              packageJsonPath = possiblePath;
-              console.log(`Found package.json at ${packageJsonPath}`);
-              break;
-            }
-          }
-        }
-      }
-      
-      let mainFile = 'index.js';
-      
-      if (packageJsonPath && fs.existsSync(packageJsonPath)) {
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-        mainFile = packageJson.main || packageJson.bin || 'index.js';
-        
-        // Handle bin object
-        if (typeof mainFile === 'object') {
-          mainFile = Object.values(mainFile)[0] || 'index.js';
-        }
-      } else {
-        console.log(`Could not find package.json for ${packageInfo.name}, using default index.js`);
-      }
+  async createNpmExecutable(packageInfo, workingDir, os) {
 
-      // Create a wrapper script
-      const wrapperScript = this.createNodeWrapper(packageInfo, mainFile);
-      const wrapperPath = path.join(workDir, 'wrapper.js');
-      fs.writeFileSync(wrapperPath, wrapperScript);
-
-      // Build executable with pkg
-      const target = this.getPkgTarget(os);
-      // Use a safe output name without @ and / for compatibility
-      const safePackageName = packageInfo.name.replace(/[@\/]/g, '_');
-      const outputName = `${safePackageName}${this.getExecutableExtension(os)}`;
-      const outputPath = path.join(workDir, outputName);
-
-      execSync(`pkg ${wrapperPath} --target ${target} --output ${outputPath}`, {
-        encoding: 'utf8',
-        timeout: 300000,
-        cwd: workDir
-      });
-
-      if (!fs.existsSync(outputPath)) {
-        throw new Error('Executable was not created');
-      }
-
-      return outputPath;
-    } catch (error) {
-      console.error('NPM executable creation failed:', error);
-      throw new Error(`Failed to create NPM executable: ${error.message}`);
+    const { name: moduleName, version } = packageInfo;
+    if (!moduleName || !version) {
+      throw new Error("Package information must include 'name' and 'version'.");
     }
+    // 1. Resolve and ensure workingDir exists
+    const wd = resolve(workingDir);
+    if (!existsSync(wd)) {
+      mkdirSync(wd, { recursive: true });
+    }
+
+    // 2. Initialize npm project if package.json is missing
+    const pkgJsonPath = join(wd, "package.json");
+    if (!existsSync(pkgJsonPath)) {
+      console.log(`Initializing new npm project in ${wd}...`);
+      await exec(`npm init -y`, { cwd: wd });
+    }
+
+    // 3. Install the specified module@version
+    console.log(`Installing ${moduleName}@${version}...`);
+    await exec(`npm install ${moduleName}@${version}`, { cwd: wd });
+
+    // 4. Read the installed module's package.json to find its "bin" entry
+    const installedPkgJsonPath = join(wd, "node_modules", moduleName, "package.json");
+    if (!existsSync(installedPkgJsonPath)) {
+      throw new Error(`Could not find ${moduleName}@${version} in node_modules.`);
+    }
+
+    const installedPkgJson = JSON.parse(readFileSync(installedPkgJsonPath, "utf-8"));
+    let binRelativePath;
+    if (typeof installedPkgJson.bin === "string") {
+      binRelativePath = installedPkgJson.bin;
+    } else if (typeof installedPkgJson.bin === "object") {
+      // Pick the first key's value
+      const keys = Object.keys(installedPkgJson.bin);
+      if (keys.length === 0) {
+        throw new Error(`No "bin" entry found in ${moduleName}'s package.json.`);
+      }
+      binRelativePath = installedPkgJson.bin[keys[0]];
+    } else {
+      throw new Error(`The package "${moduleName}" has no "bin" field.`);
+    }
+
+    const entryFile = join(wd, "node_modules", moduleName, binRelativePath);
+    if (!existsSync(entryFile)) {
+      throw new Error(`Entry file for "${moduleName}" not found at ${entryFile}.`);
+    }
+    console.log(`Using entry point: ${entryFile}`);
+
+    // 5. Create a dist directory
+    const distDir = join(wd, "dist");
+    if (!existsSync(distDir)) {
+      mkdirSync(distDir);
+    }
+
+    // 6. Bundle with esbuild
+    //    - Outputs a CommonJS bundle (remove "format=esm" for older packages).
+    //    - Targets Node.js v20 for latest feature support.
+    const bundledPath = join(distDir, "bundle.js");
+    console.log(`Bundling with esbuild → ${bundledPath} ...`);
+    await exec(
+      `npx esbuild "${entryFile}" \
+        --bundle \
+        --platform=node \
+        --target=node20 \
+        --format=cjs \
+        --outfile="${bundledPath}"`,
+      { cwd: wd }
+    );
+
+    // 7. Prepend Node shebang and mark bundled JS executable
+    const shebang = "#!/usr/bin/env node\n";
+    const originalCode = readFileSync(bundledPath, "utf-8");
+    writeFileSync(bundledPath, shebang + originalCode, "utf-8");
+    chmodSync(bundledPath, 0o755);
+    console.log(`Marked ${bundledPath} as executable.`);
+
+    // 8. Determine nexe target string & output name
+    let platformToken;
+    let outputName = moduleName;
+    if (os === "macos") {
+      platformToken = "macos-x64-20.0.0";
+      outputName = moduleName; // No extension on macOS
+    } else if (os === "linux") {
+      platformToken = "linux-x64-20.0.0";
+      outputName = moduleName; // No extension on Linux
+    } else if (os === "windows") {
+      platformToken = "windows-x64-20.0.0";
+      outputName = `${moduleName}.exe`;
+    } else {
+      throw new Error(`Unsupported OS: ${os}. Choose "macos", "linux", or "windows".`);
+    }
+
+    const nativeOutput = join(distDir, outputName);
+    console.log(`Bundling into native executable for ${os} → ${nativeOutput} ...`);
+
+    // 9. Run nexe to produce the final binary
+    await exec(
+      `npx nexe "${bundledPath}" \
+        --target ${platformToken} \
+        --output "${nativeOutput}"`,
+      { cwd: wd }
+    );
+
+    // 10. Mark the final binary executable (chmod +x) on Unix if needed
+    if (os === "macos" || os === "linux") {
+      chmodSync(nativeOutput, 0o755);
+    }
+
+    console.log(`✅ Native executable created: ${nativeOutput}`);
+    return nativeOutput;
   }
 
   async createPipExecutable(packageInfo, workDir, os) {
@@ -315,4 +354,5 @@ except Exception as e:
   }
 }
 
-module.exports = new BuildService();
+const buildService = new BuildService();
+export default buildService;

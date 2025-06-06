@@ -1,6 +1,6 @@
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 class PackageService {
   async getPackageInfo(name, repositoryManager, version = 'latest') {
@@ -47,35 +47,54 @@ class PackageService {
 
   async getPipPackageInfo(name, version) {
     try {
-      // Use pip show for installed packages or try to get info from PyPI
+      // Use uv pip show for installed packages or try to get info from PyPI
       let packageData;
       
       try {
-        // Try to get info using pip show (if package is installed)
-        const result = execSync(`pip show ${name}`, {
+        // Try to get info using uv pip show (if package is installed)
+        const result = execSync(`uv pip show ${name}`, {
           encoding: 'utf8',
           timeout: 30000
         });
         
         packageData = this.parsePipShowOutput(result);
       } catch (showError) {
-        // If pip show fails, try to install and get info
+        // If uv pip show fails, try to install and get info
         console.log(`Package ${name} not installed, attempting to fetch from PyPI...`);
         
-        // Create a temporary directory for package installation
+        // Create a temporary directory for installation
         const tempDir = path.join(__dirname, '..', 'temp', `pip_${Date.now()}`);
         fs.mkdirSync(tempDir, { recursive: true });
         
+        // Create a virtual environment using uv
+        const venvDir = path.join(tempDir, 'venv');
+        
         try {
-          const versionSpec = version === 'latest' ? name : `${name}==${version}`;
-          execSync(`pip install ${versionSpec} --target ${tempDir} --no-deps`, {
-            encoding: 'utf8',
-            timeout: 60000
-          });
-          
-          const result = execSync(`pip show ${name}`, {
+          // Create virtual environment
+          execSync(`uv venv ${venvDir}`, {
             encoding: 'utf8',
             timeout: 30000
+          });
+          
+          // Build the activation command
+          const activateCmd = process.platform === 'win32' 
+            ? `${path.join(venvDir, 'Scripts', 'activate.bat')} &&` 
+            : `. ${path.join(venvDir, 'bin', 'activate')} &&`;
+          
+          const versionSpec = version === 'latest' ? name : `${name}==${version}`;
+          
+          // Install package in the virtual environment
+          execSync(`${activateCmd} uv pip install ${versionSpec} --no-deps`, {
+            encoding: 'utf8',
+            timeout: 60000,
+            shell: true
+          });
+          
+          // Show package info
+          const result = execSync(`${activateCmd} uv pip show ${name}`, {
+            encoding: 'utf8',
+            timeout: 30000,
+            shell: true
           });
           
           packageData = this.parsePipShowOutput(result);
@@ -187,11 +206,27 @@ class PackageService {
   async downloadPipPackage(packageInfo, targetDir) {
     const packageSpec = `${packageInfo.name}==${packageInfo.version}`;
     
-    execSync(`pip install ${packageSpec} --target ${targetDir} --no-deps`, {
+    // Create a virtual environment in the target directory
+    const venvDir = path.join(targetDir, 'venv');
+    
+    // Create the virtual environment using uv
+    execSync(`uv venv ${venvDir}`, {
       encoding: 'utf8',
-      timeout: 120000
+      timeout: 30000
+    });
+    
+    // Build the activation command based on platform
+    const activateCmd = process.platform === 'win32' 
+      ? `${path.join(venvDir, 'Scripts', 'activate.bat')} &&` 
+      : `. ${path.join(venvDir, 'bin', 'activate')} &&`;
+    
+    // Install the package in the virtual environment
+    execSync(`${activateCmd} uv pip install ${packageSpec} --no-deps`, {
+      encoding: 'utf8',
+      timeout: 120000,
+      shell: true
     });
   }
 }
 
-module.exports = new PackageService();
+export default new PackageService();

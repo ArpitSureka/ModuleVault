@@ -1,21 +1,27 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
-const morgan = require('morgan');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import fs from 'fs';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import morgan from 'morgan';
 
 // Import logging utilities
-const logger = require('./utils/logger');
-const { requestTracker, performanceTracker } = require('./utils/requestUtils');
-const { requestLogger, errorLogger } = require('./utils/expressLogger');
+import logger from './utils/logger.js';
+import { requestTracker, performanceTracker } from './utils/requestUtils.js';
+import { requestLogger, errorLogger } from './utils/expressLogger.js';
 
-const { connectDB } = require('./config/database');
-const executableRoutes = require('./routes/executables');
-const logRoutes = require('./routes/logs');
-const swaggerOptions = require('./swagger');
+import { connectDB } from './config/database.js';
+import executableRoutes from './routes/executables.js';
+import logRoutes from './routes/logs.js';
+import swaggerOptions from './swagger.js';
+
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 async function startServer() {
   const app = express();
